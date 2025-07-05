@@ -4,23 +4,124 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Music, Sparkles, Heart, Zap } from "lucide-react"
+import { Music, Sparkles, Heart, Zap, Loader2 } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { useAuth } from '@/hooks/useAuth'
 
 export default function SpotifyMoodPlaylist() {
+  const router = useRouter()
   const [mood, setMood] = useState("")
-  const [isLoggedIn, setIsLoggedIn] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
+  const [playlistData, setPlaylistData] = useState<{
+    searchQuery: string
+    playlistName: string
+    playlistDescription: string
+    tracks: any[]
+    trackUris: string[]
+  } | null>(null)
+  const [playlistUrl, setPlaylistUrl] = useState("")
+  const [error, setError] = useState("")
 
   const handleSpotifyLogin = () => {
-    // This will be handled by your backend
-    console.log("Initiating Spotify OAuth...")
-    // You can redirect to your backend endpoint that handles Spotify OAuth
-    // window.location.href = '/api/auth/spotify'
+    // Redirect to our backend Spotify auth endpoint
+    window.location.href = '/api/spotify/auth'
   }
 
-  const handleGeneratePlaylist = () => {
+  const handleGeneratePlaylist = async () => {
     if (!mood.trim()) return
-    console.log("Generating playlist for mood:", mood)
-    // This will call your backend API with the mood
+    
+    setIsLoading(true)
+    setError("")
+    setPlaylistData(null)
+    setPlaylistUrl("")
+
+    try {
+      const response = await fetch('/api/mood', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ mood }),
+      })
+
+      if (!response.ok) {
+        throw new Error(await response.text())
+      }
+
+      const data = await response.json()
+      setPlaylistData(data)
+    } catch (err) {
+      console.error("Failed to generate playlist:", err)
+      setError(err instanceof Error ? err.message : "Failed to generate playlist")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleCreatePlaylist = async () => {
+    if (!playlistData) return
+    
+    setIsLoading(true)
+    setError("")
+
+    try {
+      // First we need to get the current user's Spotify ID
+      const userResponse = await fetch('https://api.spotify.com/v1/me', {
+        headers: {
+          'Authorization': `Bearer ${getCookie('spotify_access_token')}`,
+        },
+      })
+
+      if (!userResponse.ok) {
+        throw new Error("Failed to fetch user data")
+      }
+
+      const userData = await userResponse.json()
+      const userId = userData.id
+
+      // Now create the playlist
+      const createResponse = await fetch('/api/spotify/create-playlist', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${getCookie('spotify_access_token')}`,
+        },
+        body: JSON.stringify({
+          userId,
+          playlistName: playlistData.playlistName,
+          playlistDescription: playlistData.playlistDescription,
+          trackUris: playlistData.trackUris,
+        }),
+      })
+
+      if (!createResponse.ok) {
+        throw new Error(await createResponse.text())
+      }
+
+      const { playlistUrl } = await createResponse.json()
+      setPlaylistUrl(playlistUrl)
+    } catch (err) {
+      console.error("Failed to create playlist:", err)
+      setError(err instanceof Error ? err.message : "Failed to create playlist")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // Helper function to get cookies
+  const getCookie = (name: string) => {
+    if (typeof document === 'undefined') return ''
+    const value = `; ${document.cookie}`
+    const parts = value.split(`; ${name}=`)
+    if (parts.length === 2) return parts.pop()?.split(';').shift()
+    return ''
+  }
+
+  // Check if user is logged in (has access token)
+   const { isLoggedIn, isLoading: authLoading } = useAuth()
+
+  if (isLoading) {
+    return <div>Checking authentication...</div>
   }
 
   const moodSuggestions = [
@@ -93,10 +194,10 @@ export default function SpotifyMoodPlaylist() {
                 />
                 <Button
                   onClick={handleGeneratePlaylist}
-                  disabled={!mood.trim() || !isLoggedIn}
+                  disabled={!mood.trim() || !isLoggedIn || isLoading}
                   className="bg-purple-500 hover:bg-purple-600 px-6 py-3"
                 >
-                  Generate
+                  {isLoading ? 'Loading...' : 'Generate'}
                 </Button>
               </div>
 
@@ -118,6 +219,78 @@ export default function SpotifyMoodPlaylist() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Results Section */}
+          {error && (
+            <Card className="mb-8 border-red-200 bg-red-50">
+              <CardContent className="py-4 text-red-600">
+                {error}
+              </CardContent>
+            </Card>
+          )}
+
+          {playlistData && (
+            <Card className="mb-8 border-green-200 shadow-lg">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Music className="h-5 w-5 text-green-500" />
+                  Your Custom Playlist
+                </CardTitle>
+                <CardDescription>
+                  {playlistData.playlistName} - {playlistData.playlistDescription}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <h3 className="font-medium">Tracks ({playlistData.tracks.length})</h3>
+                    <div className="max-h-96 overflow-y-auto border rounded-lg">
+                      {playlistData.tracks.map((track, index) => (
+                        <div key={track.id} className="p-3 border-b hover:bg-gray-50 flex items-center gap-3">
+                          <span className="text-gray-500 w-6 text-right">{index + 1}</span>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium truncate">{track.name}</p>
+                            <p className="text-sm text-gray-600 truncate">
+                              {track.artists.join(', ')} • {track.album}
+                            </p>
+                          </div>
+                          {track.preview_url && (
+                            <audio controls className="h-8">
+                              <source src={track.preview_url} type="audio/mpeg" />
+                            </audio>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {!playlistUrl ? (
+                    <Button
+                      onClick={handleCreatePlaylist}
+                      disabled={isLoading}
+                      className="w-full bg-green-500 hover:bg-green-600"
+                    >
+                      {isLoading ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <>
+                          <Music className="mr-2 h-4 w-4" />
+                          Create Playlist on Spotify
+                        </>
+                      )}
+                    </Button>
+                  ) : (
+                    <Button asChild className="w-full bg-green-500 hover:bg-green-600">
+                      <a href={playlistUrl} target="_blank" rel="noopener noreferrer">
+                        <Music className="mr-2 h-4 w-4" />
+                        Open Playlist on Spotify
+                      </a>
+                    </Button>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Status/Info Card */}
           <Card className="bg-gradient-to-r from-green-50 to-purple-50 border-green-200">
