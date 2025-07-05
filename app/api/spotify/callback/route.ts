@@ -1,32 +1,63 @@
-// api/spotify/callback/route.ts
-import { NextResponse } from 'next/server'
-import { authorize } from '@/lib/spotify'
-import { setAuthCookies } from '@/lib/auth'
+import { NextRequest, NextResponse } from 'next/server'
 
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url)
-  const code = searchParams.get('code')
+export async function GET(request: NextRequest) {
+  const url = new URL(request.url)
+  const code = url.searchParams.get('code')
+  const error = url.searchParams.get('error')
+
+  if (error) {
+    return NextResponse.redirect(new URL('/?error=access_denied', request.url))
+  }
 
   if (!code) {
-    return NextResponse.redirect(
-      new URL('/?error=missing_code', request.url)
-    )
+    return NextResponse.redirect(new URL('/?error=no_code', request.url))
   }
 
   try {
-    const { accessToken, refreshToken, expiresIn } = await authorize(code)
-    
-    // Use the auth helper function instead of directly setting cookies
-    await setAuthCookies(accessToken, refreshToken, expiresIn)
+    const tokenResponse = await fetch('https://accounts.spotify.com/api/token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Authorization': `Basic ${Buffer.from(
+          `${process.env.SPOTIFY_CLIENT_ID}:${process.env.SPOTIFY_CLIENT_SECRET}`
+        ).toString('base64')}`,
+      },
+      body: new URLSearchParams({
+        grant_type: 'authorization_code',
+        code,
+        redirect_uri: process.env.SPOTIFY_REDIRECT_URI!,
+      }),
+    })
 
-    // Debug log - remove in production
-    console.log('Cookies set successfully')
+    if (!tokenResponse.ok) {
+      throw new Error('Failed to exchange code for token')
+    }
+
+    const tokenData = await tokenResponse.json()
     
-    return NextResponse.redirect(new URL('/', request.url))
+    const response = NextResponse.redirect(new URL('/', request.url))
+
+    response.cookies.set('spotify_access_token', tokenData.access_token, {
+      httpOnly: false,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: tokenData.expires_in,
+      path: '/',
+    })
+
+    if (tokenData.refresh_token) {
+      response.cookies.set('spotify_refresh_token', tokenData.refresh_token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 60 * 60 * 24 * 30,
+        path: '/',
+      })
+    }
+
+    return response
   } catch (error) {
-    console.error('Callback error:', error)
-    return NextResponse.redirect(
-      new URL(`/?error=auth_failed`, request.url)
-    )
+    console.error('Token exchange error:', error)
+    return NextResponse.redirect(new URL('/?error=token_exchange_failed', request.url))
   }
 }
