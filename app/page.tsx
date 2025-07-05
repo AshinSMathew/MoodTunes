@@ -4,23 +4,112 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Music, Sparkles, Heart, Zap } from "lucide-react"
+import { Music, Sparkles, Heart, Zap, Loader2, User, LogOut } from "lucide-react"
+import { useAuth } from '@/hooks/useAuth'
 
 export default function SpotifyMoodPlaylist() {
   const [mood, setMood] = useState("")
-  const [isLoggedIn, setIsLoggedIn] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
+  const [playlistData, setPlaylistData] = useState<{
+    searchQuery: string
+    playlistName: string
+    playlistDescription: string
+    tracks: any[]
+    trackUris: string[]
+  } | null>(null)
+  const [playlistUrl, setPlaylistUrl] = useState("")
+  const [error, setError] = useState("")
+
+  const { isLoggedIn, isLoading: authLoading, user, logout } = useAuth()
 
   const handleSpotifyLogin = () => {
-    // This will be handled by your backend
-    console.log("Initiating Spotify OAuth...")
-    // You can redirect to your backend endpoint that handles Spotify OAuth
-    // window.location.href = '/api/auth/spotify'
+    window.location.href = '/api/spotify/auth'
   }
 
-  const handleGeneratePlaylist = () => {
+  const handleGeneratePlaylist = async () => {
     if (!mood.trim()) return
-    console.log("Generating playlist for mood:", mood)
-    // This will call your backend API with the mood
+    
+    setIsLoading(true)
+    setError("")
+    setPlaylistData(null)
+    setPlaylistUrl("")
+
+    try {
+      const response = await fetch('/api/mood', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ mood }),
+      })
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        throw new Error(errorText || 'Failed to generate playlist')
+      }
+
+      const data = await response.json()
+      setPlaylistData(data)
+    } catch (err) {
+      console.error("Failed to generate playlist:", err)
+      setError(err instanceof Error ? err.message : "Failed to generate playlist")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleCreatePlaylist = async () => {
+    if (!playlistData || !user) return
+    
+    setIsLoading(true)
+    setError("")
+
+    try {
+      const createResponse = await fetch('/api/spotify/create-playlist', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId: user.id,
+          playlistName: playlistData.playlistName,
+          playlistDescription: playlistData.playlistDescription,
+          trackUris: playlistData.trackUris,
+        }),
+      })
+
+      if (!createResponse.ok) {
+        const errorText = await createResponse.text()
+        throw new Error(errorText || 'Failed to create playlist')
+      }
+
+      const { playlistUrl } = await createResponse.json()
+      setPlaylistUrl(playlistUrl)
+    } catch (err) {
+      console.error("Failed to create playlist:", err)
+      setError(err instanceof Error ? err.message : "Failed to create playlist")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleLogout = async () => {
+    await logout()
+    setPlaylistData(null)
+    setPlaylistUrl("")
+    setMood("")
+    setError("")
+  }
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-green-50 via-white to-green-50 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+          <p className="text-gray-600">Checking authentication...</p>
+        </div>
+      </div>
+    )
   }
 
   const moodSuggestions = [
@@ -45,6 +134,38 @@ export default function SpotifyMoodPlaylist() {
             Describe your mood and let AI create the perfect Spotify playlist for you
           </p>
         </div>
+
+        {/* User Status */}
+        {isLoggedIn && user && (
+          <div className="max-w-2xl mx-auto mb-8">
+            <Card className="border-green-200 bg-green-50">
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="bg-green-500 p-2 rounded-full">
+                      <User className="h-5 w-5 text-white" />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-gray-900">
+                        Welcome, {user.display_name || user.id}!
+                      </p>
+                      <p className="text-sm text-gray-600">Connected to Spotify</p>
+                    </div>
+                  </div>
+                  <Button
+                    onClick={handleLogout}
+                    variant="outline"
+                    size="sm"
+                    className="border-green-300 text-green-700 hover:bg-green-100"
+                  >
+                    <LogOut className="h-4 w-4 mr-2" />
+                    Logout
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
         {/* Main Content */}
         <div className="max-w-2xl mx-auto">
@@ -93,10 +214,14 @@ export default function SpotifyMoodPlaylist() {
                 />
                 <Button
                   onClick={handleGeneratePlaylist}
-                  disabled={!mood.trim() || !isLoggedIn}
+                  disabled={!mood.trim() || !isLoggedIn || isLoading}
                   className="bg-purple-500 hover:bg-purple-600 px-6 py-3"
                 >
-                  Generate
+                  {isLoading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    'Generate'
+                  )}
                 </Button>
               </div>
 
@@ -118,6 +243,89 @@ export default function SpotifyMoodPlaylist() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Results Section */}
+          {error && (
+            <Card className="mb-8 border-red-200 bg-red-50">
+              <CardContent className="py-4">
+                <div className="flex items-center gap-2 text-red-600">
+                  <span className="font-medium">Error:</span>
+                  <span>{error}</span>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {playlistData && (
+            <Card className="mb-8 border-green-200 shadow-lg">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Music className="h-5 w-5 text-green-500" />
+                  Your Custom Playlist
+                </CardTitle>
+                <CardDescription>
+                  {playlistData.playlistName} - {playlistData.playlistDescription}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <h3 className="font-medium">Tracks ({playlistData.tracks.length})</h3>
+                    <div className="max-h-96 overflow-y-auto border rounded-lg">
+                      {playlistData.tracks.map((track, index) => (
+                        <div key={track.id} className="p-3 border-b last:border-b-0 hover:bg-gray-50 flex items-center gap-3">
+                          <span className="text-gray-500 w-6 text-right">{index + 1}</span>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium truncate">{track.name}</p>
+                            <p className="text-sm text-gray-600 truncate">
+                              {track.artists.join(', ')} • {track.album}
+                            </p>
+                          </div>
+                          {track.preview_url && (
+                            <audio controls className="h-8">
+                              <source src={track.preview_url} type="audio/mpeg" />
+                            </audio>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {!playlistUrl ? (
+                    <Button
+                      onClick={handleCreatePlaylist}
+                      disabled={isLoading || !user}
+                      className="w-full bg-green-500 hover:bg-green-600"
+                    >
+                      {isLoading ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <>
+                          <Music className="mr-2 h-4 w-4" />
+                          Create Playlist on Spotify
+                        </>
+                      )}
+                    </Button>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                        <div className="flex items-center gap-2 text-green-700">
+                          <Music className="h-5 w-5" />
+                          <span className="font-medium">Playlist created successfully!</span>
+                        </div>
+                      </div>
+                      <Button asChild className="w-full bg-green-500 hover:bg-green-600">
+                        <a href={playlistUrl} target="_blank" rel="noopener noreferrer">
+                          <Music className="mr-2 h-4 w-4" />
+                          Open Playlist on Spotify
+                        </a>
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Status/Info Card */}
           <Card className="bg-gradient-to-r from-green-50 to-purple-50 border-green-200">
