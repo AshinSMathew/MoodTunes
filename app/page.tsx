@@ -133,6 +133,13 @@ export default function SpotifyMoodPlaylist() {
           <p className="text-xl text-gray-600 max-w-2xl mx-auto">
             Describe your mood and let AI create the perfect Spotify playlist for you
           </p>
+          <p className="text-sm text-green-700">
+            Due to Spotify's developer limitations, access is currently restricted.
+            <br></br>To request access, email your name and Spotify account to {' '}
+            <a href="mailto:ashinsabu005@gmail.com" className="font-medium underline text-green-700 hover:text-yellow-600">
+              ashinsabu005@gmail.com
+            </a>.
+          </p>
         </div>
 
         {/* User Status */}

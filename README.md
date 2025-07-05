@@ -1,36 +1,59 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# MoodTunes - Music Recommendation Based on Mood
 
-## Getting Started
+MoodTunes is a web application that provides personalized music recommendations based on your current mood. It integrates with Spotify to analyze your music preferences and suggest tracks that match your emotional state.
 
-First, run the development server:
+## Features
 
+- Mood-based music recommendations
+- Spotify integration for personalized suggestions
+- AI-powered mood analysis
+- User-friendly interface
+- Playlist generation
+
+## Spotify API Access Note
+
+- Due to Spotify's developer account limitations, only **25 users** can access the application through my developer account.
+- If you would like to try MoodTunes, please send your name and Spotify account email to **[ashinsabu005@gmail.com](mailto:ashinsabu005@gmail.com)** to be added to the allowed users list.
+- You'll be added to the whitelist within 24 hours
+
+## Environment Variables
+
+The following environment variables are required to run the application:
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+SPOTIFY_CLIENT_ID=
+SPOTIFY_CLIENT_SECRET=
+SPOTIFY_REDIRECT_URI=http://127.0.0.1:3000/api/spotify/callback
+GEMINI_API_KEY=
+NODE_ENV=development
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Live Demo
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+A hosted version of MoodTunes is available at: [mood-tunes-spotify.vercel.app](https://mood-tunes-spotify.vercel.app/)
 
-## Learn More
+## Screenshots
 
-To learn more about Next.js, take a look at the following resources:
+![MoodTunes Dashboard](./public/dashboard.png)
+**MoodTunes Dashboard** 
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+![Music Suggestion Interface](./public/music%20Suggestion.png)
+**Music Suggestion Interface**
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+![Playlist In Spotify](./public/spotify%20playlist.png)
+**Playlist In Spotify**
 
-## Deploy on Vercel
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Technologies Used
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Next.js
+- React
+- Spotify Web API
+- Google Gemini API
+- Tailwind CSS
+
+
+## Contact
+
+For questions or support, please contact:  
+Ashinsabu - [ashinsabu005@gmail.com](mailto:ashinsabu005@gmail.com)
